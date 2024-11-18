@@ -18,13 +18,22 @@ export async function POST(req: Request) {
       openAIApiKey: process.env.OPENAI_API_KEY!,
     });
 
+     // Convert question into an embedding
+    const questionEmbedding = await embeddings.embedQuery(question);
+
     const index = pinecone.Index(process.env.PINECONE_INDEX_NAME!);
+
     const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
       pineconeIndex: index,
       filter: { documentId },
     });
 
-    const results = await vectorStore.similaritySearch(question, 4);
+    //const results = await vectorStore.similaritySearch(question, 4);
+    // Perform similarity search with the embedding
+    const results = await vectorStore.similaritySearchVectorWithScore(
+      questionEmbedding,
+      4
+    );
 
     if (results.length === 0) {
       return NextResponse.json({
@@ -32,7 +41,13 @@ export async function POST(req: Request) {
       });
     }
 
-    const contentText = results.map((r) => r.pageContent).join("\n");
+    // const contentText = results.map((r) => r.pageContent).join("\n");
+
+    // Combine content from the results
+    const contentText = results
+      .map((r) => r[0]?.pageContent)
+      .filter(Boolean)
+      .join("\n");
 
     const openai = new OpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY!,
